@@ -1,0 +1,479 @@
+--[[
+    DOORS GOD MODE v3.0 | Исправленная версия
+    - Работает на ПК и телефоне
+    - Кнопка полёта на мобильном
+    - ESP с расстоянием
+    - Трекер ближайшего предмета/двери
+    - Предупреждения о монстрах
+]]
+
+local success, err = pcall(function()
+    -- Сервисы
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local UserInputService = game:GetService("UserInputService")
+    local CoreGui = game:GetService("CoreGui")
+    local Workspace = game:GetService("Workspace")
+    local Lighting = game:GetService("Lighting")
+    local Camera = Workspace.CurrentCamera
+
+    local LocalPlayer = Players.LocalPlayer
+    if not LocalPlayer then
+        LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait() or Players.LocalPlayer
+    end
+
+    local isMobile = UserInputService.TouchEnabled
+
+    -- Настройки
+    local Settings = {
+        ESP_Monsters = true,
+        ESP_Items = true,
+        ESP_Doors = true,
+        ESP_Closets = true,
+        ESP_Books = true,
+        ESP_Players = true,
+        GodMode = true,
+        Noclip = true,
+        Fly = false,
+        Speed = 24,
+        Jump = 50,
+        Fullbright = true,
+        AutoUnlock = true,
+        AutoCollect = true,
+        Warnings = true,
+        Tracker = true
+    }
+
+    -- Монстры
+    local Monsters = {
+        Rush = {clr=Color3.fromRGB(255,100,0), dist=150, msg="⚠️ RUSH! ПРЯЧЬСЯ! ⚠️"},
+        Ambush = {clr=Color3.fromRGB(0,255,100), dist=150, msg="⚠️ AMBUSH! ВОЗВРАЩАЕТСЯ! ⚠️"},
+        Seek = {clr=Color3.fromRGB(255,0,0), dist=200, msg="👁️ SEEK! БЕГИ! 👁️"},
+        Figure = {clr=Color3.fromRGB(150,0,255), dist=120, msg="🦯 FIGURE! ТИХО! 🦯"},
+        Screech = {clr=Color3.fromRGB(255,255,0), dist=60, msg="🦇 SCREECH! СМОТРИ В ГЛАЗА! 🦇"},
+        Halt = {clr=Color3.fromRGB(0,255,255), dist=100, msg="🚦 HALT! СТОЙ И ИДИ! 🚦"},
+        Eyes = {clr=Color3.fromRGB(255,0,255), dist=80, msg="👀 ГЛАЗА! НЕ СМОТРИ! 👀"},
+        Hide = {clr=Color3.fromRGB(139,69,19), dist=50, msg="😡 HIDE! ВЫЛЕЗАЙ ИЗ ШКАФА! 😡"},
+        Jack = {clr=Color3.fromRGB(255,255,255), dist=30, msg="🎭 JACK! НЕ ВХОДИ В ШКАФ! 🎭"},
+        Shadow = {clr=Color3.fromRGB(128,128,128), dist=40, msg="👻 ТЕНЬ! ПРОСТО СМОТРИТ! 👻"},
+        Glitch = {clr=Color3.fromRGB(0,255,0), dist=100, msg="💻 ГЛИТЧ! НЕ ЗАСТРЕВАЙ! 💻"},
+        Dupe = {clr=Color3.fromRGB(255,165,0), dist=50, msg="🚪 DUPE! ПРОВЕРЬ ДВЕРЬ! 🚪"},
+        Snare = {clr=Color3.fromRGB(0,100,0), dist=10, msg="🌿 ЛОВУШКА! НЕ НАСТУПИ! 🌿"}
+    }
+
+    -- GUI
+    local ScreenGui = Instance.new("ScreenGui", CoreGui)
+    ScreenGui.Name = "DoorsGodGUI"
+
+    local main = Instance.new("Frame", ScreenGui)
+    main.Size = UDim2.new(0, isMobile and 350 or 300, 0, isMobile and 580 or 520)
+    main.Position = UDim2.new(0.5, -(isMobile and 175 or 150), 0.5, -(isMobile and 290 or 260))
+    main.BackgroundColor3 = Color3.fromRGB(15,15,20)
+    main.BackgroundTransparency = 0.1
+    main.Active = true
+    main.Draggable = true
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0,16)
+    Instance.new("UIStroke", main).Color = Color3.fromRGB(0,255,200)
+
+    local title = Instance.new("TextLabel", main)
+    title.Size = UDim2.new(1,0,0,50)
+    title.BackgroundTransparency = 1
+    title.Text = "🚪 DOORS GOD MODE 🚪"
+    title.TextColor3 = Color3.new(1,1,1)
+    title.TextSize = isMobile and 22 or 20
+    title.Font = Enum.Font.GothamBlack
+
+    local close = Instance.new("TextButton", main)
+    close.Size = UDim2.new(0,36,0,36)
+    close.Position = UDim2.new(1,-44,0,7)
+    close.BackgroundColor3 = Color3.fromRGB(255,60,60)
+    close.Text = "✕"
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 26
+    Instance.new("UICorner", close).CornerRadius = UDim.new(0,12)
+    close.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+
+    local scroll = Instance.new("ScrollingFrame", main)
+    scroll.Size = UDim2.new(1,-20,1,-60)
+    scroll.Position = UDim2.new(0,10,0,55)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = isMobile and 8 or 5
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(0,255,200)
+    scroll.CanvasSize = UDim2.new(0,0,0,1000)
+
+    local function addToggle(name, set, y, icon)
+        local h = isMobile and 55 or 45
+        local btn = Instance.new("TextButton", scroll)
+        btn.Size = UDim2.new(1,-10,0,h)
+        btn.Position = UDim2.new(0,5,0,y)
+        btn.BackgroundColor3 = Color3.fromRGB(30,30,40)
+        btn.BackgroundTransparency = 0.4
+        btn.Text = icon.." "..name..": "..(Settings[set] and "✅" or "❌")
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.TextSize = isMobile and 16 or 14
+        btn.Font = Enum.Font.GothamSemibold
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0,10)
+        btn.MouseButton1Click:Connect(function()
+            Settings[set] = not Settings[set]
+            btn.Text = icon.." "..name..": "..(Settings[set] and "✅" or "❌")
+        end)
+    end
+
+    addToggle("ESP Монстры", "ESP_Monsters", 15, "👁️")
+    addToggle("ESP Предметы", "ESP_Items", 80, "📦")
+    addToggle("ESP Двери", "ESP_Doors", 145, "🚪")
+    addToggle("ESP Шкафы", "ESP_Closets", 210, "🗄️")
+    addToggle("ESP Книги", "ESP_Books", 275, "📚")
+    addToggle("ESP Игроки", "ESP_Players", 340, "👤")
+    addToggle("Неуязвимость", "GodMode", 405, "🛡️")
+    addToggle("Noclip", "Noclip", 470, "🚧")
+    addToggle("Ускорение x1.5", "Speed", 535, "⚡")
+    addToggle("Супер-прыжок", "Jump", 600, "🦘")
+    addToggle("Полное освещение", "Fullbright", 665, "💡")
+    addToggle("Авто-двери", "AutoUnlock", 730, "🔓")
+    addToggle("Авто-сбор", "AutoCollect", 795, "💰")
+    addToggle("Предупреждения", "Warnings", 860, "📢")
+    addToggle("Трекер (полоска)", "Tracker", 925, "📍")
+    addToggle("Полёт", "Fly", 990, "🪽")
+
+    if isMobile then
+        local flyBtn = Instance.new("TextButton", ScreenGui)
+        flyBtn.Size = UDim2.new(0,80,0,80)
+        flyBtn.Position = UDim2.new(1,-100,1,-150)
+        flyBtn.BackgroundColor3 = Color3.fromRGB(0,150,200)
+        flyBtn.BackgroundTransparency = 0.3
+        flyBtn.Text = "🪽\nПОЛЁТ"
+        flyBtn.TextColor3 = Color3.new(1,1,1)
+        flyBtn.Font = Enum.Font.GothamBold
+        flyBtn.TextSize = 18
+        Instance.new("UICorner", flyBtn).CornerRadius = UDim.new(0,40)
+        local flyState = false
+        flyBtn.MouseButton1Click:Connect(function()
+            flyState = not flyState
+            Settings.Fly = flyState
+            flyBtn.BackgroundColor3 = flyState and Color3.fromRGB(0,200,0) or Color3.fromRGB(0,150,200)
+            flyBtn.Text = flyState and "🪽\nСТОП" or "🪽\nПОЛЁТ"
+        end)
+    end
+
+    -- Предупреждения
+    local warnFrame = Instance.new("Frame", ScreenGui)
+    warnFrame.Size = UDim2.new(0,300,0,70)
+    warnFrame.Position = UDim2.new(0.5,-150,0.1,0)
+    warnFrame.BackgroundColor3 = Color3.fromRGB(20,20,30)
+    warnFrame.BackgroundTransparency = 0.2
+    warnFrame.Visible = false
+    Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0,12)
+    Instance.new("UIStroke", warnFrame).Color = Color3.fromRGB(255,0,0)
+
+    local warnTitle = Instance.new("TextLabel", warnFrame)
+    warnTitle.Size = UDim2.new(1,0,0,30)
+    warnTitle.BackgroundTransparency = 1
+    warnTitle.Text = "⚠️ ОПАСНОСТЬ ⚠️"
+    warnTitle.TextColor3 = Color3.fromRGB(255,100,100)
+    warnTitle.Font = Enum.Font.GothamBlack
+    warnTitle.TextSize = 22
+
+    local warnDist = Instance.new("TextLabel", warnFrame)
+    warnDist.Size = UDim2.new(1,0,0,20)
+    warnDist.Position = UDim2.new(0,0,0,35)
+    warnDist.BackgroundTransparency = 1
+    warnDist.Text = "Расстояние: 0m"
+    warnDist.TextColor3 = Color3.fromRGB(200,200,200)
+    warnDist.Font = Enum.Font.Gotham
+    warnDist.TextSize = 14
+
+    -- Трекер
+    local trackFrame = Instance.new("Frame", ScreenGui)
+    trackFrame.Size = UDim2.new(0,250,0,40)
+    trackFrame.Position = UDim2.new(0.5,-125,0.9,-20)
+    trackFrame.BackgroundColor3 = Color3.fromRGB(20,20,30)
+    trackFrame.BackgroundTransparency = 0.3
+    trackFrame.Visible = false
+    Instance.new("UICorner", trackFrame).CornerRadius = UDim.new(0,8)
+    Instance.new("UIStroke", trackFrame).Color = Color3.fromRGB(0,255,200)
+
+    local trackLabel = Instance.new("TextLabel", trackFrame)
+    trackLabel.Size = UDim2.new(1,0,1,0)
+    trackLabel.BackgroundTransparency = 1
+    trackLabel.Text = "📍 Ничего не найдено"
+    trackLabel.TextColor3 = Color3.new(1,1,1)
+    trackLabel.Font = Enum.Font.GothamBold
+    trackLabel.TextSize = 14
+
+    -- Стрелка трекера
+    local arrow = Instance.new("ImageLabel", ScreenGui)
+    arrow.Size = UDim2.new(0,40,0,40)
+    arrow.Position = UDim2.new(0.5,-20,0.5,-20)
+    arrow.BackgroundTransparency = 1
+    arrow.Image = "rbxassetid://7072711516"
+    arrow.Visible = false
+
+    -- Функции
+    local function onChar(char)
+        local hum = char:WaitForChild("Humanoid")
+        hum:GetPropertyChangedSignal("Health"):Connect(function()
+            if Settings.GodMode and hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
+        end)
+        hum.WalkSpeed = Settings.Speed
+        hum.JumpPower = Settings.Jump
+    end
+    if LocalPlayer.Character then onChar(LocalPlayer.Character) end
+    LocalPlayer.CharacterAdded:Connect(onChar)
+
+    RunService.Stepped:Connect(function()
+        if Settings.Noclip and LocalPlayer.Character then
+            for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
+        end
+    end)
+
+    if Settings.Fullbright then
+        Lighting.Brightness = 2
+        Lighting.Ambient = Color3.fromRGB(180,180,180)
+        Lighting.FogEnd = 100000
+    end
+
+    -- Полёт
+    local flying = false
+    local bg, bv
+    local function startFly()
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        if not root or not hum then return end
+        flying = true
+        bg = Instance.new("BodyGyro", root)
+        bg.MaxTorque = Vector3.new(9e9,9e9,9e9)
+        bg.CFrame = root.CFrame
+        bv = Instance.new("BodyVelocity", root)
+        bv.MaxForce = Vector3.new(9e9,9e9,9e9)
+        hum.PlatformStand = true
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end
+    local function stopFly()
+        flying = false
+        if bg then bg:Destroy() end
+        if bv then bv:Destroy() end
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if not isMobile and input.KeyCode == Enum.KeyCode.F then
+            Settings.Fly = not Settings.Fly
+            if Settings.Fly then startFly() else stopFly() end
+        end
+    end)
+
+    spawn(function()
+        local last = false
+        while true do
+            if Settings.Fly ~= last then
+                last = Settings.Fly
+                if Settings.Fly then startFly() else stopFly() end
+            end
+            task.wait(0.1)
+        end
+    end)
+
+    RunService.RenderStepped:Connect(function()
+        if flying and Settings.Fly and LocalPlayer.Character then
+            local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local cam = Camera
+                local move = Vector3.zero
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+                if bv then bv.Velocity = move * 50 end
+                if bg then bg.CFrame = cam.CFrame end
+            end
+        end
+    end)
+
+    -- ESP и трекер
+    local function createHighlight(obj, color, text)
+        if obj:FindFirstChild("ESP_Highlight") then return end
+        local h = Instance.new("Highlight", obj)
+        h.Name = "ESP_Highlight"
+        h.FillColor = color
+        h.FillTransparency = 0.5
+        h.OutlineColor = Color3.new(1,1,1)
+        local bgui = Instance.new("BillboardGui", obj)
+        bgui.Name = "ESP_Label"
+        bgui.Size = UDim2.new(0,100,0,30)
+        bgui.StudsOffset = Vector3.new(0,3,0)
+        bgui.AlwaysOnTop = true
+        local lbl = Instance.new("TextLabel", bgui)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = text
+        lbl.TextColor3 = Color3.new(1,1,1)
+        lbl.TextStrokeTransparency = 0
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 14
+    end
+
+    local function getMonster(obj)
+        local n = obj.Name:lower()
+        for m, cfg in pairs(Monsters) do
+            if n:find(m:lower()) then return m, cfg end
+        end
+    end
+
+    RunService.Heartbeat:Connect(function()
+        if not LocalPlayer.Character then return end
+        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        local closestMonster, closestDist, closestCfg
+        local closestItem, itemDist, itemName, itemColor, itemPos
+
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            local hl = obj:FindFirstChild("ESP_Highlight")
+            local lbl = obj:FindFirstChild("ESP_Label")
+            local show = false
+            local color = Color3.new(1,1,1)
+            local name = obj.Name
+
+            local mName, mCfg = getMonster(obj)
+            if mName and Settings.ESP_Monsters then
+                show = true
+                color = mCfg.clr
+                name = mName
+                if Settings.Warnings then
+                    local pos = obj:IsA("Model") and obj:GetPivot().Position or obj.Position
+                    local d = (pos - root.Position).Magnitude
+                    if d <= mCfg.dist and (not closestMonster or d < closestDist) then
+                        closestMonster, closestDist, closestCfg = mName, d, mCfg
+                    end
+                end
+            elseif not show and Settings.ESP_Items then
+                local nl = obj.Name:lower()
+                if obj:IsA("Tool") or nl:find("key") or nl:find("lockpick") or nl:find("vitamin") or nl:find("flashlight") or nl:find("lighter") or nl:find("gold") or nl:find("coin") or nl:find("battery") then
+                    show = true
+                    color = Color3.fromRGB(255,255,0)
+                    name = "📦 "..obj.Name
+                end
+            elseif not show and Settings.ESP_Doors and obj:IsA("Model") and obj.Name:lower():find("door") then
+                show = true
+                color = Color3.fromRGB(0,255,0)
+                name = "🚪 Door"
+            elseif not show and Settings.ESP_Closets then
+                local nl = obj.Name:lower()
+                if obj:IsA("Model") and (nl:find("wardrobe") or nl:find("closet") or nl:find("bed")) then
+                    show = true
+                    color = Color3.fromRGB(139,69,19)
+                    name = "🗄️ "..obj.Name
+                end
+            elseif not show and Settings.ESP_Books then
+                local nl = obj.Name:lower()
+                if obj:IsA("BasePart") and (nl:find("book") or nl:find("paper")) then
+                    show = true
+                    color = Color3.fromRGB(255,215,0)
+                    name = "📚 "..obj.Name
+                end
+            elseif not show and Settings.ESP_Players and obj:IsA("Model") then
+                local plr = Players:GetPlayerFromCharacter(obj)
+                if plr and plr ~= LocalPlayer then
+                    show = true
+                    color = Color3.fromRGB(0,100,255)
+                    name = "👤 "..plr.Name
+                end
+            end
+
+            if show then
+                if not hl and not lbl then createHighlight(obj, color, name) end
+                if lbl then
+                    local pos = obj:IsA("Model") and obj:GetPivot().Position or obj.Position
+                    local d = math.floor((pos - root.Position).Magnitude)
+                    lbl.TextLabel.Text = name.." ["..d.."m]"
+                    if Settings.Tracker and (name:find("📦") or name:find("🚪") or name:find("🔑")) then
+                        if not closestItem or d < itemDist then
+                            closestItem, itemDist, itemName, itemColor, itemPos = obj, d, name, color, pos
+                        end
+                    end
+                end
+            else
+                if hl then hl:Destroy() end
+                if lbl then lbl:Destroy() end
+            end
+        end
+
+        if closestItem and Settings.Tracker then
+            trackFrame.Visible = true
+            trackLabel.Text = itemName.." ["..math.floor(itemDist).."м]"
+            trackLabel.TextColor3 = itemColor or Color3.new(1,1,1)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(itemPos)
+            if onScreen then
+                arrow.Visible = true
+                arrow.Position = UDim2.new(0, screenPos.X-20, 0, screenPos.Y-20)
+                arrow.Rotation = 0
+            else
+                local center = Camera.ViewportSize/2
+                local dir = (Vector2.new(screenPos.X, screenPos.Y) - center).Unit
+                arrow.Position = UDim2.new(0, center.X + dir.X*150 - 20, 0, center.Y + dir.Y*150 - 20)
+                arrow.Rotation = math.deg(math.atan2(dir.Y, dir.X))
+                arrow.Visible = true
+            end
+        else
+            trackFrame.Visible = false
+            arrow.Visible = false
+        end
+
+        if closestMonster and closestCfg then
+            warnFrame.Visible = true
+            warnTitle.Text = closestCfg.msg
+            warnTitle.TextColor3 = closestCfg.clr
+            warnDist.Text = "Расстояние: "..math.floor(closestDist).."m"
+        else
+            warnFrame.Visible = false
+        end
+    end)
+
+    -- Автоматизация
+    spawn(function()
+        while true do
+            if LocalPlayer.Character then
+                local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    if Settings.AutoUnlock then
+                        for _, obj in ipairs(Workspace:GetDescendants()) do
+                            if obj:IsA("Model") and obj.Name:lower():find("door") then
+                                for _, p in ipairs(obj:GetDescendants()) do
+                                    if p:IsA("ProximityPrompt") then
+                                        pcall(function() p:InputHoldBegin(); task.wait(0.2); p:InputHoldEnd() end)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if Settings.AutoCollect then
+                        for _, obj in ipairs(Workspace:GetDescendants()) do
+                            if obj:IsA("Tool") and obj:FindFirstChild("Handle") then
+                                firetouchinterest(root, obj.Handle, 0)
+                                firetouchinterest(root, obj.Handle, 1)
+                            end
+                        end
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+
+    print("DOORS GOD MODE v3.0 загружен без ошибок!")
+end)
+
+if not success then
+    warn("Ошибка запуска: "..tostring(err))
+end
