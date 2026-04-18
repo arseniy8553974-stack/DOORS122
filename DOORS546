@@ -1,0 +1,226 @@
+-- // 📦 DOORS: Предметный ESP + Авто-Лут (Исправленная версия) //
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+-- Настройки скрипта
+local Settings = {
+    ItemESP = true,        -- Подсветка предметов с их именами
+    AutoCollect = true     -- Автоматический подбор предметов
+}
+
+-- Создаём главный GUI
+local ScreenGui = Instance.new("ScreenGui", CoreGui)
+ScreenGui.Name = "ItemESP_GUI"
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 200, 0, 80)
+MainFrame.Position = UDim2.new(0.5, -100, 0.8, -40)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.Active = true
+MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.BackgroundTransparency = 1
+Title.Text = "📦 Предметы"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+-- Переключатель ESP
+local ToggleESP = Instance.new("TextButton", MainFrame)
+ToggleESP.Size = UDim2.new(1, -10, 0, 25)
+ToggleESP.Position = UDim2.new(0, 5, 0, 28)
+ToggleESP.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+ToggleESP.Text = "ESP: ВКЛ"
+ToggleESP.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleESP.Font = Enum.Font.Gotham
+ToggleESP.TextSize = 12
+Instance.new("UICorner", ToggleESP).CornerRadius = UDim.new(0, 6)
+
+ToggleESP.MouseButton1Click:Connect(function()
+    Settings.ItemESP = not Settings.ItemESP
+    ToggleESP.Text = Settings.ItemESP and "ESP: ВКЛ" or "ESP: ВЫКЛ"
+    ToggleESP.BackgroundColor3 = Settings.ItemESP and Color3.fromRGB(0, 150, 200) or Color3.fromRGB(80, 80, 80)
+end)
+
+-- Переключатель Авто-Лута
+local ToggleAuto = Instance.new("TextButton", MainFrame)
+ToggleAuto.Size = UDim2.new(1, -10, 0, 25)
+ToggleAuto.Position = UDim2.new(0, 5, 0, 56)
+ToggleAuto.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+ToggleAuto.Text = "Авто-лут: ВКЛ"
+ToggleAuto.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleAuto.Font = Enum.Font.Gotham
+ToggleAuto.TextSize = 12
+Instance.new("UICorner", ToggleAuto).CornerRadius = UDim.new(0, 6)
+
+ToggleAuto.MouseButton1Click:Connect(function()
+    Settings.AutoCollect = not Settings.AutoCollect
+    ToggleAuto.Text = Settings.AutoCollect and "Авто-лут: ВКЛ" or "Авто-лут: ВЫКЛ"
+    ToggleAuto.BackgroundColor3 = Settings.AutoCollect and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(80, 80, 80)
+end)
+
+-- Храним ссылки на созданные подсветки, чтобы их можно было удалить
+local ESP_Objects = {}
+
+-- Функция для получения читаемого названия предмета
+local function getItemName(obj)
+    local rawName = obj.Name:lower()
+    local nameMap = {
+        flashlight = "Фонарик",
+        lighter = "Зажигалка",
+        lockpick = "Отмычка",
+        vitamins = "Витамины",
+        key = "Ключ",
+        skeletonkey = "Ключ-скелет",
+        gold = "Золото",
+        coin = "Монета",
+        battery = "Батарейка",
+        bandage = "Бинт",
+        candle = "Свеча",
+        crucifix = "Распятие",
+        scanner = "Сканер",
+        ["shears"] = "Ножницы",
+        ["shears"] = "Кусачки",
+        ["gummy flashlight"] = "Мармеладный фонарик",
+        ["shakelight"] = "Фонарик-трясучка",
+        ["bulklight"] = "Массивный фонарик",
+        ["laser pointer"] = "Лазерная указка",
+        ["gift"] = "Подарок",
+        ["lootbag"] = "Мешок с добычей",
+        ["barrel"] = "Бочка"
+    }
+    return nameMap[rawName] or ("Предмет: " .. obj.Name)
+end
+
+-- Создаём подсветку для предмета
+local function createItemESP(item)
+    if not item or not item.Parent then return end
+    
+    -- Удаляем старую подсветку, если она была
+    if ESP_Objects[item] then
+        ESP_Objects[item]:Destroy()
+        ESP_Objects[item] = nil
+    end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ItemESP_Highlight"
+    highlight.FillColor = Color3.fromRGB(255, 215, 0) -- Золотой
+    highlight.FillTransparency = 0.4
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.Parent = item
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ItemESP_Label"
+    billboard.Size = UDim2.new(0, 120, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = item
+
+    local label = Instance.new("TextLabel", billboard)
+    label.BackgroundTransparency = 1
+    label.Text = getItemName(item)
+    label.TextColor3 = Color3.fromRGB(255, 215, 0)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.TextStrokeTransparency = 0
+
+    ESP_Objects[item] = highlight
+end
+
+-- Удаляем подсветку у предмета
+local function removeItemESP(item)
+    if ESP_Objects[item] then
+        ESP_Objects[item]:Destroy()
+        ESP_Objects[item] = nil
+    end
+    local label = item:FindFirstChild("ItemESP_Label")
+    if label then label:Destroy() end
+end
+
+-- Проверяем, является ли объект предметом
+local function isItem(obj)
+    if not obj:IsA("Tool") and not obj:IsA("Model") then
+        return false
+    end
+    local name = obj.Name:lower()
+    return name:find("flashlight") or name:find("lighter") or name:find("lockpick") 
+        or name:find("vitamin") or name:find("key") or name:find("gold") 
+        or name:find("coin") or name:find("battery") or name:find("bandage")
+        or name:find("candle") or name:find("crucifix") or name:find("scanner")
+        or name:find("shears") or name:find("gift") or name:find("loot")
+end
+
+-- Функция авто-лута
+local function autoCollectItems()
+    if not Settings.AutoCollect then return end
+    if not LocalPlayer.Character then return end
+    
+    local character = LocalPlayer.Character
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    local backpack = LocalPlayer.Backpack
+    local characterItems = character:GetChildren()
+    
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if isItem(obj) and obj.Parent == Workspace then
+            local success, err = pcall(function()
+                local handle = obj:FindFirstChild("Handle")
+                if handle then
+                    firetouchinterest(rootPart, handle, 0)
+                    firetouchinterest(rootPart, handle, 1)
+                end
+            end)
+        end
+    end
+end
+
+-- Главный цикл ESP
+RunService.Heartbeat:Connect(function()
+    local processedItems = {}
+    
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if isItem(obj) then
+            processedItems[obj] = true
+            if Settings.ItemESP then
+                if not ESP_Objects[obj] then
+                    createItemESP(obj)
+                end
+            else
+                removeItemESP(obj)
+            end
+        end
+    end
+    
+    -- Удаляем ESP у предметов, которых больше нет в мире
+    for item, highlight in pairs(ESP_Objects) do
+        if not item.Parent or not processedItems[item] then
+            removeItemESP(item)
+        end
+    end
+end)
+
+-- Цикл авто-лута
+spawn(function()
+    while true do
+        autoCollectItems()
+        wait(0.5)
+    end
+end)
+
+-- Слушатель: когда предмет подбирается (удаляется из Workspace), убираем его ESP
+Workspace.DescendantRemoving:Connect(function(obj)
+    if isItem(obj) and ESP_Objects[obj] then
+        removeItemESP(obj)
+    end
+end)
+
+print("✅ Скрипт 'Предметный ESP + Авто-Лут' активирован!")
